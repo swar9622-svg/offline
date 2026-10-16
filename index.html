@@ -2905,7 +2905,7 @@ function sheetRowsLike(names){for(const n of names){if(state.sheets[n])return st
 function importRows(sheets){const out={};for(const [name,rs] of Object.entries(sheets||{})){out[name]=(rs||[]).map(r=>(r||[]).map(clean));}state.sheets=out;save();return Object.keys(out).length;}
 function importBase(){try{const wb=XLSX.read(Uint8Array.from(atob(embeddedBook),c=>c.charCodeAt(0)),{type:'array',cellDates:true});const s={};wb.SheetNames.forEach(n=>s[n]=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',raw:false}));importRows(s);}catch(e){console.error('تعذر تحميل البيانات المبدئية',e)}}
 function find(name, aliases=[]){return [name,...aliases].find(n=>state.sheets[n])}
-function students(cls){let name=find(cls)||cls, rs=rows(name), h=rs[0]||[]; if(!rs.length||!h.includes('اسم الطالب')) rs=rows('الطلاب'),h=rs[0]||[];return rs.slice(1).map(r=>{let i=n=>h.indexOf(n);return {name:r[i('الاسم')]||r[i('اسم الطالب')]||'',className:r[i('الصف')]||cls,section:r[i('الفصل')]||'',loginCode:r[i('رمز الدخول')]||r[i('LoginCode')]||'',stage:r[i('المرحلة')]||''};}).filter(x=>x.name&&(!cls||x.className===cls));}
+function students(cls){let name=find(cls)||cls, rs=rows(name), h=rs[0]||[]; if(!rs.length||!h.includes('اسم الطالب')) rs=rows('الطلاب'),h=rs[0]||[];return rs.slice(1).map(r=>{let i=n=>h.indexOf(n);return {name:r[i('الاسم')]||r[i('اسم الطالب')]||'',className:r[i('الصف')]||cls,section:r[i('الفصل')]||'',loginCode:r[i('رمز الدخول')]||r[i('LoginCode')]||'',id:r[i('رمز الدخول')]||r[i('LoginCode')]||'',stage:r[i('المرحلة')]||''};}).filter(x=>x.name&&(!cls||x.className===cls));}
 function assignmentSettings(){const rs=rows('إعدادات_الواجبات'),h=rs[0]||[];return rs.slice(1).map(r=>{let g=n=>r[h.indexOf(n)]||'';return {className:g('الصف'),id:g('رقم الواجب'),title:g('اسم الدرس'),lesson:g('اسم الدرس'),status:g('الحالة'),startDate:g('من'),endDate:g('إلى'),answerModelUrl:g('رابط نموذج الإجابة'),isPublished:/منشور|نشر|active/i.test(g('الحالة'))};}).filter(x=>x.id);}
 function questions(cls,id){let sh=find('بنك_الأسئلة_'+cls,['بنك_الأسئلة_ثاني متوسط','بنك_الأسئلة_سادس','بنك_الأسئلة_أول_متوسط']);let rs=rows(sh)||[],h=rs[0]||[];return rs.slice(1).filter(r=>String(r[h.indexOf('رقم الواجب')]||'')===String(id)).map(r=>{let g=n=>r[h.indexOf(n)]||'';let choices=[g('خيار 1'),g('خيار 2'),g('خيار 3'),g('خيار 4')];return {number:g('رقم السؤال'),text:g('نص السؤال'),question:g('نص السؤال'),choices,correct:g('الإجابة الصحيحة'),score:Number(g('الدرجة'))||1,questionType:g('نوع السؤال')||'choice',shortTemplate:g('قالب الإجابة القصيرة'),shortAnswers:tryJson(g('إجابات قصيرة')),choiceLayout:g('تخطيط الخيارات')||'column',imageUrl:'',choiceImages:[]};});}
 function tryJson(v){try{return JSON.parse(v||'[]')}catch(e){return[]}}
@@ -2916,7 +2916,7 @@ function api(method,args){
  if(method==='loginTeacher'){if(String(a[0]||'')===state.password||String(a[0]||'')==='1234'||String(a[0]||'')==='admin')return {success:true,token:'offline-teacher'};return {success:false,message:'كلمة سر المعلم غير صحيحة. كلمة السر الافتراضية للأوفلاين: 1234'};}
  if(method==='logoutTeacher')return {success:true};
  if(method==='getStudentsData')return catalog().students.reduce((o,s)=>(o[s.className]=o[s.className]||[],o[s.className].push(s),o),{});
- if(method==='getPortalCatalog')return catalog();
+ if(method==='getPortalCatalog'){const cs=catalog().classes;return cs.map(c=>({className:c,stage:(students(c)[0]||{}).stage||'',sections:[...new Set(students(c).map(x=>String(x.section||'')).filter(Boolean))]}));}
  if(method==='getPortalStructure')return catalog();
  if(method==='getStudentManagementData')return students(cls);
  if(method==='getAssignmentQuestions'||method==='getAssignmentQuestions_raw_')return questions(cls,a[1]);
@@ -2946,3 +2946,11 @@ window.addEventListener('load',load);load();
 })();
 </script>
 <style id="offline-final-style">.teacher-btn-icon{display:flex!important;position:absolute!important;top:12px!important;left:12px!important;right:auto!important;z-index:10001!important;cursor:pointer!important}.teacher-hidden-for-student{display:none!important}input[type=file]{font-family:inherit}.offline-no-image{display:none!important}</style>
+
+<script id="offline-class-filter">
+(function(){
+ function getClasses(){try{var st=JSON.parse(localStorage.getItem('بوابة_الواجبات_أوفلاين')||'{}'),rs=(st.sheets||{})['الطلاب']||[],h=rs[0]||[],i=h.indexOf('الصف'),out=[];rs.slice(1).forEach(function(r){var c=String(r[i]||'').trim();if(c&&out.indexOf(c)<0)out.push(c);});return out;}catch(e){return ['ثاني متوسط'];}}
+ function sync(){var cs=getClasses();document.querySelectorAll('select').forEach(function(s){if(!(/class/i.test(s.id||'')||s.id==='classSelect'))return;var sig=cs.join('|'),old=s.value;if(s.dataset.offlineClasses===sig)return;s.dataset.offlineClasses=sig;var first=s.options[0]&&s.options[0].value===''?s.options[0].text:'-- اختر الصف --';s.innerHTML='<option value="">'+first+'</option>'+cs.map(function(c){return '<option value="'+String(c).replace(/"/g,'&quot;')+'">'+c+'</option>';}).join('');if(cs.indexOf(old)>=0)s.value=old;else if(s.id==='classSelect'&&cs.length===1)s.value=cs[0];});}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync);else sync();new MutationObserver(sync).observe(document.body,{childList:true,subtree:true});window.setTimeout(sync,500);window.setTimeout(sync,1500);
+})();
+</script>
